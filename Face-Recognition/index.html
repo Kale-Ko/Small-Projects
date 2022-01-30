@@ -1,0 +1,53 @@
+<!--
+    MIT License
+    Copyright (c) 2021 Kale Ko
+    See https://kaleko.ga/license.txt
+-->
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <title>Face Recognition</title>
+</head>
+
+<body>
+    <img id="image" src="/get_image" alt="Image Feed"></img>
+    <video id="rawVideo" style="display: none;"></video>
+
+    <script>
+        var image = document.getElementById("image")
+        var video = document.getElementById("rawVideo")
+
+        navigator.mediaDevices.getUserMedia({ audio: false, video: true }).then(stream => {
+            video.srcObject = stream
+
+            video.addEventListener("loadedmetadata", () => {
+                var startTime = new Date()
+                video.play()
+
+                var tmpimage = document.createElement("canvas")
+                tmpimage.width = video.videoWidth
+                tmpimage.height = video.videoHeight
+
+                function getFrame() {
+                    video.currentTime = (new Date().getTime() - startTime.getTime()) / 1000
+                    tmpimage.getContext("2d").clearRect(0, 0, tmpimage.width, tmpimage.height)
+                    tmpimage.getContext("2d").drawImage(video, 0, 0, tmpimage.width, tmpimage.height)
+                    return tmpimage.toDataURL()
+                }
+
+                function sendImage() {
+                    fetch("/proccess_image", { method: "POST", body: getFrame() }).then(res => res.text()).then(data => {
+                        requestAnimationFrame(sendImage)
+
+                        if (image.src == new URL("/get_image2", document.baseURI).href) image.src = "/get_image"
+                        else image.src = "/get_image2"
+                    })
+                }
+                sendImage()
+            }, false)
+        })
+    </script>
+</body>
+
+</html>
