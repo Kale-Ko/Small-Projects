@@ -1,0 +1,10 @@
+{
+    "name": "curseforge-mod-updater",
+    "version": "1.0.0",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "mc-curseforge-api": "^2.2.3"
+    }
+}
