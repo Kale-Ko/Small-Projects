@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en-uS">
+
+<head>
+    <title>Golf AI</title>
+</head>
+
+<body>
+    <canvas id="game"></canvas>
+
+    <script>
+        var canvas = document.getElementById("game")
+        var context = canvas.getContext("2d")
+
+        const fps = 30
+        const ups = 100
+
+        const canvasScale = 60
+
+        const S = 0.1
+        const F = 0.0025
+
+        const method = "random" // "perfect", "random"
+
+        const sample = 5000
+
+        const rotstep = 0.125
+        const powstep = 0.5
+
+        const showTesting = false
+        const showDistance = false
+
+        const levels = [
+            {
+                width: 12, height: 12, speed: 1.5, data: [
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1,
+                    1, 0, 2, 0, 0, 0, 1, 1, 0, 3, 0, 1,
+                    1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1,
+                    1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1,
+                    1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1,
+                    1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1,
+                    1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+                ], scores: []
+            },
+            {
+                width: 20, height: 12, speed: 2, data: [
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                ], scores: []
+            },
+            {
+                width: 20, height: 12, speed: 2, data: [
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1,
+                    1, 0, 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1,
+                    1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 1,
+                    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                ], scores: []
+            }
+        ]
+
+        var currentLevel = 0
+
+        simulate(levels[currentLevel])
+
+        function simulate(level, ballx, bally) {
+            const balls = []
+            const finished = []
+
+            for (var i = 0; i < sample; i++) {
+                var powx = (Math.random() * level.speed * 2) - level.speed
+                var powy = (Math.random() * level.speed * 2) - level.speed
+
+                balls.push({
+                    x: (ballx == undefined ? level.data.indexOf(2) % level.width : ballx),
+                    y: (bally == undefined ? Math.round(level.data.indexOf(2) / level.width) : bally),
+                    velocity: {
+                        x: powx,
+                        y: powy
+                    },
+                    time: 0,
+                    distance: 0,
+                    startParams: {
+                        x: level.data.indexOf(2) % level.width,
+                        y: Math.floor(level.data.indexOf(2) / level.width),
+                        velocity: {
+                            x: powx,
+                            y: powy
+                        }
+                    }
+                })
+
+            }
+
+            // var angle = 0
+            // var power = powstep
+            // while (power < level.speed) {
+            //     var theta = angle * (Math.PI / 180)
+            //     var powx = Math.cos(theta) * power
+            //     var powy = Math.sin(theta) * power
+
+            //     angle += rotstep
+
+            //     if (angle >= 360) {
+            //         angle = 0
+
+            //         power += powstep
+            //     }
+
+            //     balls.push({
+            //         x: level.data.indexOf(2) % level.width,
+            //         y: Math.round(level.data.indexOf(2) / level.width),
+            //         velocity: {
+            //             x: powx,
+            //             y: powy
+            //         },
+            //         time: 0,
+            //         startParams: {
+            //             x: level.data.indexOf(2) % level.width,
+            //             y: Math.round(level.data.indexOf(2) / level.width),
+            //             velocity: {
+            //                 x: powx,
+            //                 y: powy
+            //             }
+            //         }
+            //     })
+            // }
+
+            var startX = level.data.indexOf(3) % level.width
+            var startY = Math.floor(level.data.indexOf(3) / level.width)
+
+            level.scores[startX + (startY * level.width)] = 0
+
+            var queue = [{ x: startX, y: startY }]
+
+            for (var i = 0; queue.length > 0; i++) {
+                var current = queue[0]
+                queue.splice(queue.indexOf(current), 1)
+
+                if (level.data[current.x + (current.y * level.width)] == 1) continue
+
+                var ran = false
+
+                if (current.x + 1 < level.width && level.scores[(current.x + 1) + (current.y * level.width)] == undefined) {
+                    level.scores[(current.x + 1) + (current.y * level.width)] = level.scores[current.x + (current.y * level.width)] + 1
+                    queue.push({ x: current.x + 1, y: current.y })
+                    ran = true
+                }
+                if (current.x - 1 >= 0 && level.scores[(current.x - 1) + (current.y * level.width)] == undefined) {
+                    level.scores[(current.x - 1) + (current.y * level.width)] = level.scores[current.x + (current.y * level.width)] + 1
+                    queue.push({ x: current.x - 1, y: current.y })
+                    ran = true
+                }
+                if (current.y + 1 < level.height && level.scores[current.x + ((current.y + 1) * level.width)] == undefined) {
+                    level.scores[current.x + ((current.y + 1) * level.width)] = level.scores[current.x + (current.y * level.width)] + 1
+                    queue.push({ x: current.x, y: current.y + 1 })
+                    ran = true
+                }
+                if (current.y - 1 >= 0 && level.scores[current.x + ((current.y - 1) * level.width)] == undefined) {
+                    level.scores[current.x + ((current.y - 1) * level.width)] = level.scores[current.x + (current.y * level.width)] + 1
+                    queue.push({ x: current.x, y: current.y - 1 })
+                    ran = true
+                }
+
+                if (ran) i--
+            }
+
+            console.log("Simulating " + balls.length + " balls")
+
+            var best = null
+
+            var renderer = setInterval(() => {
+                canvas.width = (level.width) * canvasScale
+                canvas.height = (level.height) * canvasScale
+
+                context.fillStyle = "#22aa22"
+                context.beginPath()
+                context.rect(0, 0, canvas.width, canvas.height)
+                context.fill()
+                context.closePath()
+
+                for (var y = 0; y < level.height; y++) {
+                    for (var x = 0; x < level.width; x++) {
+                        if (showDistance && level.data[x + (y * level.width)] == 0 && level.scores[x + (y * level.width)] != undefined) {
+                            context.fillStyle = "rgb(" + level.scores[x + (y * level.width)] * 4 + ", " + level.scores[x + (y * level.width)] * 4 + ", " + level.scores[x + (y * level.width)] * 4 + ")"
+                            context.beginPath()
+                            context.rect(x * canvasScale, y * canvasScale, canvasScale, canvasScale)
+                            context.fill()
+                            context.closePath()
+                        } else if (level.data[x + (y * level.width)] == 1) {
+                            context.fillStyle = "#663300"
+                            context.beginPath()
+                            context.rect(x * canvasScale, y * canvasScale, canvasScale, canvasScale)
+                            context.fill()
+                            context.closePath()
+                        } else if (level.data[x + (y * level.width)] == 3) {
+                            context.fillStyle = "#aaaaaa"
+                            context.beginPath()
+                            context.ellipse((x * canvasScale) + (canvasScale / 2), (y * canvasScale) + (canvasScale / 2), canvasScale / 3, canvasScale / 3, 0, 0, Math.PI * 2)
+                            context.fill()
+                            context.closePath()
+                        }
+                    }
+                }
+
+                if (!showTesting && best == null) return
+
+                balls.forEach(ball => {
+                    context.fillStyle = "#ffffff"
+                    context.beginPath()
+                    context.ellipse(((ball.x) * canvasScale) + (canvasScale / 2), ((ball.y) * canvasScale) + (canvasScale / 2), canvasScale / 4, canvasScale / 4, 0, 0, Math.PI * 2)
+                    context.fill()
+                    context.closePath()
+                })
+            }, 1000 / fps)
+
+            var updater = setInterval(() => {
+                balls.forEach(ball => {
+                    ball.time++
+
+                    if (ball.velocity.x == 0 && ball.velocity.y == 0) return
+
+                    if (ball.velocity.x > 0) {
+                        ball.velocity.x -= F * ball.velocity.x
+                    } else if (ball.velocity.x < 0) {
+                        ball.velocity.x += F * -ball.velocity.x
+                    }
+
+                    if (Math.abs(ball.velocity.x) <= F * 2) {
+                        ball.velocity.x = 0
+                    }
+
+                    if (ball.velocity.y > 0) {
+                        ball.velocity.y -= F * ball.velocity.y
+                    } else if (ball.velocity.y < 0) {
+                        ball.velocity.y += F * -ball.velocity.y
+                    }
+
+                    if (Math.abs(ball.velocity.y) <= F * 2) {
+                        ball.velocity.y = 0
+                    }
+
+                    if (finished.length > 1 && Math.abs(ball.velocity.x) <= F * 2 && Math.abs(ball.velocity.y) <= F * 2) {
+                        balls.splice(balls.indexOf(ball), 1)
+                    }
+
+                    ball.x += ball.velocity.x * S
+                    ball.y += ball.velocity.y * S
+
+                    ball.distance += Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y)
+
+                    function checkCollision(ball, x, y) {
+                        return level.data[Math.round(x) + (Math.round(y) * level.width)] == 1
+                            && (ball.x * canvasScale) + (canvasScale / 4) < (x * canvasScale) + canvasScale
+                            && (ball.x * canvasScale) + ((canvasScale / 4) * 3) > (x * canvasScale)
+                            && (ball.y * canvasScale) + (canvasScale / 4) < (y * canvasScale) + canvasScale
+                            && (ball.y * canvasScale) + ((canvasScale / 4) * 3) > (y * canvasScale)
+                    }
+
+                    if (checkCollision(ball, Math.round(ball.x), Math.round(ball.y))) {
+                        ball.x -= ball.velocity.x * S
+                        ball.y -= ball.velocity.y * S
+                    }
+
+                    if (checkCollision(ball, Math.round(ball.x) + 1, Math.round(ball.y))) {
+                        ball.x -= ball.velocity.x * S
+                        ball.distance -= Math.abs(ball.velocity.x)
+
+                        ball.velocity.x = -ball.velocity.x
+                    }
+                    if (checkCollision(ball, Math.round(ball.x) - 1, Math.round(ball.y))) {
+                        ball.x -= ball.velocity.x * S
+                        ball.distance -= Math.abs(ball.velocity.x)
+
+                        ball.velocity.x = -ball.velocity.x
+                    }
+                    if (checkCollision(ball, Math.round(ball.x), Math.round(ball.y) + 1)) {
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.y)
+
+                        ball.velocity.y = -ball.velocity.y
+                    }
+                    if (checkCollision(ball, Math.round(ball.x), Math.round(ball.y) - 1)) {
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.y)
+
+                        ball.velocity.y = -ball.velocity.y
+                    }
+
+
+                    if (checkCollision(ball, Math.round(ball.x) + 1, Math.round(ball.y) + 1)) {
+                        ball.X -= ball.velocity.X * S
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y)
+
+                        ball.velocity.x = -ball.velocity.x
+                        ball.velocity.y = -ball.velocity.y
+                    }
+                    if (checkCollision(ball, Math.round(ball.x) - 1, Math.round(ball.y) - 1)) {
+                        ball.X -= ball.velocity.X * S
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y)
+
+                        ball.velocity.x = -ball.velocity.x
+                        ball.velocity.y = -ball.velocity.y
+                    }
+                    if (checkCollision(ball, Math.round(ball.x) + 1, Math.round(ball.y) - 1)) {
+                        ball.X -= ball.velocity.X * S
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y)
+
+                        ball.velocity.x = -ball.velocity.x
+                        ball.velocity.y = -ball.velocity.y
+                    }
+                    if (checkCollision(ball, Math.round(ball.x) - 1, Math.round(ball.y) + 1)) {
+                        ball.X -= ball.velocity.X * S
+                        ball.y -= ball.velocity.y * S
+                        ball.distance -= Math.abs(ball.velocity.x) + Math.abs(ball.velocity.y)
+
+                        ball.velocity.x = -ball.velocity.x
+                        ball.velocity.y = -ball.velocity.y
+                    }
+
+                    function checkHoleCollision(ball, x, y) {
+                        return level.data[Math.round(ball.x) + (Math.round(ball.y) * level.width)] == 3
+                            && (ball.x * canvasScale) + (canvasScale / 4) < (x * canvasScale) + ((canvasScale / 4) * 2)
+                            && (ball.x * canvasScale) + ((canvasScale / 4) * 3) > (x * canvasScale) + (canvasScale / 4)
+                            && (ball.y * canvasScale) + (canvasScale / 4) < (y * canvasScale) + ((canvasScale / 4) * 2)
+                            && (ball.y * canvasScale) + ((canvasScale / 4) * 3) > (y * canvasScale) + (canvasScale / 4)
+                    }
+
+                    if (ball.x != Math.round(ball.x) && ball.y != Math.round(ball.y) && checkHoleCollision(ball, Math.round(ball.x), Math.round(ball.y))) {
+                        ball.x = Math.round(ball.x)
+                        ball.y = Math.round(ball.y)
+
+                        ball.velocity.x = 0
+                        ball.velocity.y = 0
+
+                        balls.splice(balls.indexOf(ball), 1)
+                        finished.push(ball)
+
+                        if (ball == best) {
+                            console.log("Finished replaying, loading next level")
+
+                            clearInterval(renderer)
+                            clearInterval(updater)
+
+                            currentLevel++
+
+                            simulate(levels[currentLevel])
+
+                            return
+                        }
+                    }
+                    var done = true
+                    for (var i = 0; i < balls.length; i++) {
+                        if (balls[i].velocity.x != 0 || balls[i].velocity.y != 0) {
+                            done = false
+
+                            return
+                        }
+                    }
+
+                    if (done && finished.length > 0) {
+                        best = finished[0]
+
+                        finished.forEach(ball => {
+                            if (ball.distance < best.distance) best = ball
+                        })
+
+                        best = best.startParams
+                        best.startParams = best
+
+                        console.log("Found best path, replaying")
+
+                        balls.length = 0
+                        balls.push(best)
+                    } else if (done) {
+                        console.log("No path found in one move, trying from best spot")
+
+                        best = balls[0]
+                        balls.forEach(ball => {
+                            if (level.scores[Math.round(ball.x) + ((Math.round(ball.y) + 1) * level.width)] < level.scores[Math.round(best.x) + ((Math.round(best.y) + 1) * level.width)]) best = ball
+                        })
+
+                        clearInterval(renderer)
+                        clearInterval(updater)
+
+                        simulate(level, best.x, best.y)
+                    }
+                })
+            }, 1000 / ups)
+        }
+    </script>
+</body>
+
+</html>
