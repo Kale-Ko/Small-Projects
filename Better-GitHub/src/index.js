@@ -1,11 +1,22 @@
-/**
-    @license
-    MIT License
-    Copyright (c) 2021 Kale Ko
-    See https://kaleko.ga/license.txt
-*/
-
 window.addEventListener("load", () => {
+    update()
+
+    var prevHref = document.location.href
+
+    var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+            if (prevHref != document.location.href) {
+                prevHref = document.location.href
+
+                update()
+            }
+        })
+    })
+
+    observer.observe(document.body, { childList: true, subtree: true })
+})
+
+function update() {
     var settings = null
 
     async function loadSetting() {
@@ -245,4 +256,4 @@ window.addEventListener("load", () => {
             }
         } else console.error("Could not find file action list")
     })
-})
+}
