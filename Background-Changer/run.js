@@ -1,10 +1,3 @@
-/**
-    @license
-    MIT License
-    Copyright (c) 2021 Kale Ko
-    See https://kaleko.ga/license.txt
-*/
-
 var url = "https://apod.nasa.gov/apod.rss"
 
 const del = require("del");

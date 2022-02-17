@@ -1,9 +1,3 @@
-/**
-    MIT License
-    Copyright (c) 2021 Kale Ko
-    See https://kaleko.ga/license.txt
-*/
-
 #include <iostream>
 #include <windows.h>
 using namespace std::string_literals;
