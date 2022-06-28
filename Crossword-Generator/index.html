@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Word Search Generator</title>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <br>
+    <p id="error"></p>
+    <br>
+    <label for="words">Words: </label><input id="words" type="text"><br>
+    <label for="size">Size: </label><input id="size" type="number"><br>
+    <label for="scale">Scale: </label><input id="scale" type="number"><br>
+    <label for="advanced">All Directions: </label><input id="advanced" type="checkbox"><br>
+    <br>
+    <button id="generate">Generate</button>
+
+    <script>
+        var canvas = document.getElementById("canvas")
+        var context = canvas.getContext("2d")
+
+        var size = 16
+
+        var block = 24
+        var border = 2
+
+        var letters = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+
+        var words = ["hello", "world", "word", "search"]
+        var directions = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }]
+
+        var debug = false
+
+        var grid = []
+
+        function load() {
+            if (localStorage.getItem("settings") != null) {
+                var settings = JSON.parse(localStorage.getItem("settings"))
+
+                document.getElementById("words").value = settings.words
+                document.getElementById("size").value = settings.size
+                document.getElementById("scale").value = settings.scale
+                document.getElementById("advanced").checked = settings.advanced
+            }
+        }
+
+        function save() {
+            localStorage.setItem("settings", JSON.stringify({ size: document.getElementById("size").value, scale: document.getElementById("scale").value, words: document.getElementById("words").value, advanced: document.getElementById("advanced").checked }))
+        }
+
+        document.getElementById("words").value = words.join(", ")
+        document.getElementById("size").value = size
+        document.getElementById("scale").value = block
+        document.getElementById("advanced").checked = false
+
+        document.getElementById("words").addEventListener("change", save)
+        document.getElementById("size").addEventListener("change", save)
+        document.getElementById("scale").addEventListener("change", save)
+        document.getElementById("advanced").addEventListener("change", save)
+
+        function generate() {
+            try {
+                function getLength(arr) {
+                    var x = 0
+
+                    for (var i = 0; i < arr.length; i++) {
+                        if (arr[i] != undefined) {
+                            x++
+                        }
+                    }
+
+                    return x
+                }
+
+                function getRandPos() {
+                    var x = Math.floor(Math.random() * size)
+                    var y = Math.floor(Math.random() * size)
+
+                    if (grid[(y * size) + x] == undefined) {
+                        return { x, y }
+                    } else {
+                        return getRandPos()
+                    }
+                }
+
+                function getRandPosWMargin(distance, dir) {
+                    var x = Math.floor(Math.random() * size)
+                    var y = Math.floor(Math.random() * size)
+
+                    var empty = true
+
+                    for (var i = 0; i < distance; i++) {
+                        if (grid[((y + (dir.y * i)) * size) + x + (dir.x * i)] != undefined || x + (dir.x * i) < 0 || y + (dir.y * i) < 0 || x + (dir.x * i) >= size || y + (dir.y * i) >= size) {
+                            empty = false
+                        }
+                    }
+
+                    if (empty) {
+                        return { x, y }
+                    } else {
+                        return getRandPosWMargin(distance, dir)
+                    }
+                }
+
+                function getRandItem(arr) {
+                    return arr[Math.floor(Math.random() * arr.length)]
+                }
+
+                load()
+
+                words = document.getElementById("words").value.replace(/ /g, "")
+
+                while (words.includes(",,")) {
+                    words = words.replace(/,,/g, ",")
+                }
+
+                words = words.split(",")
+
+                size = parseInt(document.getElementById("size").value)
+                block = parseFloat(document.getElementById("scale").value)
+
+                canvas.width = ((block + border) * size) + border
+                canvas.height = ((block + border) * size) + border
+
+                if (document.getElementById("advanced").checked) {
+                    directions = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }]
+                } else {
+                    directions = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 }]
+                }
+
+                if (words.includes("enabledebug")) {
+                    debug = true
+                }
+
+                grid = []
+
+                for (var i = 0; i < words.length; i++) {
+                    var word = words[i]
+
+                    var dir = getRandItem(directions)
+                    var pos = getRandPosWMargin(word.length, dir)
+
+                    for (var i2 = 0; i2 < word.length; i2++) {
+                        grid[((pos.y + (dir.y * i2)) * size) + pos.x + (dir.x * i2)] = word[i2]
+                    }
+                }
+
+                if (!debug) {
+                    for (; getLength(grid) < size * size;) {
+                        var pos = getRandPos()
+
+                        grid[(pos.y * size) + pos.x] = getRandItem(letters)
+                    }
+                }
+            } catch (e) {
+                if (e.__proto__.name == "RangeError") {
+                    grid = []
+
+                    document.getElementById("error").innerText = "This board is impossible"
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        document.getElementById("generate").addEventListener("click", generate)
+
+        generate()
+
+        setInterval(() => {
+            context.fillStyle = "#bbbbbb"
+            context.fillRect(0, 0, canvas.width, canvas.height)
+
+            for (var x = 0; x < size; x++) {
+                for (var y = 0; y < size; y++) {
+                    context.fillStyle = "#ffffff"
+                    context.fillRect(border + (x * (block + border)), border + (y * (block + border)), block, block)
+
+                    if (grid[(y * size) + x] != undefined) {
+                        context.fillStyle = "#000000"
+                        context.textAlign = "center"
+                        context.font = (block * 0.85) + "px ariel"
+                        context.fillText(grid[(y * size) + x], (border * 2) + ((x + 0.333) * (block + border)), (border * 2) + ((y + 0.55) * (block + border)), (block - (border * 2)))
+                    }
+                }
+            }
+        }, 1000 / 30);
+    </script>
+</body>
+
+</html>
