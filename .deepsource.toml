@@ -23,7 +23,7 @@ enabled = true
   [analyzers.meta]
   environment = [
     "browser",
-    "nodejs>=16"
+    "nodejs"
   ]
 
 [[analyzers]]
