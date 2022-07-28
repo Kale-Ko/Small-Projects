@@ -20,6 +20,12 @@ enabled = true
 name = "javascript"
 enabled = true
 
+  [analyzers.meta]
+  environment = [
+    "browser",
+    "nodejs'
+  ]
+
 [[analyzers]]
 name = "python"
 enabled = true
