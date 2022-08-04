@@ -1,0 +1,10 @@
+{
+  "loader": "fabric",
+  "version": "1.19.1",
+  "type": "client",
+  "maxConcurrentDownloads": 5,
+  "addExtraMeta": true,
+  "sortMods": true,
+  "modsDir": "%appdata%/.minecraft/mods",
+  "mods": []
+}

@@ -1,4 +1,4 @@
-const config = require("./config.json")
+const config = require("./config.js")
 const fs = require("fs")
 const fetch = require("fetch").fetchUrl
 const extract = require("extract-zip");
@@ -80,13 +80,17 @@ function scan(path, display, isRoot) {
                 if (file.split(".")[file.split(".").length - 1].toLowerCase() == extension.id.toLowerCase()) {
                     var contents = fs.readFileSync(path + "/" + file).toString()
 
+                    if (extension.fileValidator != null && !extension.fileValidator(contents)) warnings.push(display + "/" + file + " is not valid for the detected type")
+
                     if (!extension.disableEndBlankLine && (contents.endsWith("\r\n") || contents.endsWith("\n") || contents.endsWith("\r"))) warnings.push(display + "/" + file + " ends with a blank line")
 
                     var lines = contents.split("\n")
                     var index = 1
                     lines.forEach(line => {
+                        if (extension.lineValidator != null && !extension.lineValidator(line)) warnings.push(display + "/" + file + " " + index + " is not valid for the detected type")
+
                         if (!extension.disableBlankLine && line.includes(" ") && line.replace(/ /g, "").length == 0) warnings.push(display + "/" + file + " " + index + " is a blank line with spaces")
-                        else if (!extension.disableSpaceEnd && line.endsWith(" ")) warnings.push(display + "/" + file + " " + index + " ends with a space")
+                        else if (!extension.disableSpaceEnd && line.endsWith(" ") && !((extension.ignoreSpacesAfterComments && (line.trim().startsWith("//") || line.trim().startsWith("#") || line.trim().startsWith("*"))) || (extension.ignoreSpacesAfterEmptyBlockComments && line.trim().startsWith("*")))) warnings.push(display + "/" + file + " " + index + " ends with a space")
 
                         index++
                     })
