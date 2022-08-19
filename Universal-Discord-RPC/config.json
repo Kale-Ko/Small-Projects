@@ -1,0 +1,58 @@
+{
+    "applications": [
+        {
+            "name": "Minecraft",
+            "id": 1010244063573848145,
+            "matches": {
+                "title": "(Minecraft|SKlauncher)(.*)",
+                "process": "(javaw.exe|Minecraft.exe)"
+            },
+            "states": [
+                {
+                    "state": "In the launcher",
+                    "matches": {
+                        "title": "(Minecraft Launcher|SKlauncher)(.*)",
+                        "process": "(Minecraft.exe|javaw.exe)"
+                    }
+                },
+                {
+                    "state": "Playing singleplayer",
+                    "matches": {
+                        "title": "(Minecraft)(.*) - Singleplayer(.*)",
+                        "process": "(javaw.exe)"
+                    }
+                },
+                {
+                    "state": "Playing multiplayer",
+                    "matches": {
+                        "title": "(Minecraft)(.*) - Multiplayer(.*)",
+                        "process": "(javaw.exe)"
+                    }
+                }
+            ],
+            "state": "In the menu",
+            "image": "grass",
+            "smallImage": "craftingtable"
+        },
+        {
+            "name": "Roblox",
+            "id": 1010298358738460674,
+            "matches": {
+                "title": "Roblox",
+                "process": "(ApplicationFrameHost.exe)"
+            },
+            "state": "Playing a fun game",
+            "image": "roblox"
+        },
+        {
+            "name": "VSCode",
+            "id": 1010267926722523258,
+            "matches": {
+                "title": "(.*) - Visual Studio Code",
+                "process": "(Code.exe)"
+            },
+            "state": "Coding something cool",
+            "image": "vscode"
+        }
+    ]
+}
