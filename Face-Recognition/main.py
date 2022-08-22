@@ -5,7 +5,7 @@ import flask
 import urllib
 import tempfile
 
-debug = False
+debug = True
 
 camera = False
 image = False
@@ -132,7 +132,7 @@ if sys.argv.__len__() > 1:
         @app.route("/proccess_image", methods=["POST"])
         def proccess_image():
             data = flask.request.get_data().decode("utf-8")
-            if data.startsWith("data:"):
+            if data.startswith("data:"):
                 data = urllib.request.urlopen(data)
                 data = numpy.asarray(bytearray(data.read()), dtype="uint8")
                 data = cv2.imdecode(data, cv2.IMREAD_COLOR)
@@ -165,11 +165,11 @@ if sys.argv.__len__() > 1:
     elif sys.argv[1] == "--image":
         image = sys.argv[2]
     else:
-        print("Usage [-webcam, --webcam (cameraid), --image (filename)]")
+        print("Usage [-webcam, --webcam (cameraid), --image (filename), -stream]")
 
         sys.exit(1)
 else:
-    print("Usage [-stream, -webcam, --webcam (cameraid), --image (filename)]")
+    print("Usage [-stream, -webcam, --webcam (cameraid), --image (filename), -stream]")
 
     sys.exit(1)
 
