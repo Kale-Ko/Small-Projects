@@ -16,7 +16,7 @@ DiscordRPC.setLoggerEnabled(False)
 
 
 def loadConfig():
-    return json.loads(open("./config.json", "r").read())
+    return json.load("./config.json")
 
 
 def getForegroundWindow():

@@ -1,10 +1,10 @@
 const fs = require("fs")
 const crypto = require("crypto")
 
-import("node-fetch").then(async fetch => {
+import("node-fetch").then(fetch => {
     fetch = fetch.default
 
-    async function reliableFetch(url, options) {
+    function reliableFetch(url, options) {
         return new Promise((resolve, reject) => {
             var timeout = 30
 
@@ -38,7 +38,7 @@ import("node-fetch").then(async fetch => {
         })
     }
 
-    async function getJson(res) {
+    function getJson(res) {
         return new Promise((resolve, reject) => {
             res.text().then(data => {
                 try {
@@ -171,7 +171,7 @@ import("node-fetch").then(async fetch => {
 
             reliableFetch("https://api.modrinth.com/v2/project/" + (id.id || id), { out: (msg) => { messages.push(msg) } }).then(res => getJson(res)).then(mod => {
                 if (config.addExtraMeta) {
-                    config.mods[config.mods.indexOf(id)] = { id: mod.id, slug: mod.slug, name: mod.title }
+                    config.mods[config.mods.indexOf(id)] = { id: mod.id, slug: mod.slug, name: mod.title, overrides: id.overrides }
                 } else {
                     config.mods[config.mods.indexOf(id)] = mod.id
                 }
@@ -182,12 +182,50 @@ import("node-fetch").then(async fetch => {
                     var latest = null
 
                     versions.forEach(version => {
-                        if (version.loaders.includes(config.loader) && version.game_versions.includes(config.version)) {
-                            if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
-                                latest = version
+                        if (version.loaders.includes(config.loader)) {
+                            if (id.overrides != undefined && id.overrides.versions != undefined) {
+                                id.overrides.versions.forEach(configVersion => {
+                                    if (version.game_versions.includes(configVersion)) {
+                                        if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                            latest = version
+                                        }
+                                    }
+                                })
+                            } else {
+                                config.versions.forEach(configVersion => {
+                                    if (version.game_versions.includes(configVersion)) {
+                                        if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                            latest = version
+                                        }
+                                    }
+                                })
                             }
                         }
                     })
+
+                    if (latest == null) {
+                        versions.forEach(version => {
+                            if (version.loaders.includes(config.loader)) {
+                                if (id.overrides != undefined && id.overrides.allowVersions != undefined) {
+                                    id.overrides.allowVersions.forEach(configVersion => {
+                                        if (version.game_versions.includes(configVersion)) {
+                                            if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                                latest = version
+                                            }
+                                        }
+                                    })
+                                } else {
+                                    config.allowVersions.forEach(configVersion => {
+                                        if (version.game_versions.includes(configVersion)) {
+                                            if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                                latest = version
+                                            }
+                                        }
+                                    })
+                                }
+                            }
+                        })
+                    }
 
                     var foundVersion = false
 
@@ -272,7 +310,11 @@ import("node-fetch").then(async fetch => {
             type = "all"
         }
 
-        var facets = [["categories:" + config.loader], ["versions:" + config.version], ["project_type:mod"]]
+        var facets = [["project_type:mod"], ["categories:" + config.loader]]
+
+        config.versions.forEach(version => {
+            facets.push(["versions:" + version])
+        })
 
         if (config.type == "client") {
             facets.push(["client_side:optional", "client_side:required"])
@@ -321,7 +363,11 @@ import("node-fetch").then(async fetch => {
             fs.writeFileSync("./cache.json", JSON.stringify(cache, null, 2))
         })
     } else if (mode.toLowerCase() == "cacheall") {
-        var facets = [["categories:" + config.loader], ["versions:" + config.version], ["project_type:mod"]]
+        var facets = [["project_type:mod"], ["categories:" + config.loader]]
+
+        config.versions.forEach(version => {
+            facets.push(["versions:" + version])
+        })
 
         if (config.type == "client") {
             facets.push(["client_side:optional", "client_side:required"])

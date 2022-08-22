@@ -132,19 +132,22 @@ if sys.argv.__len__() > 1:
         @app.route("/proccess_image", methods=["POST"])
         def proccess_image():
             data = flask.request.get_data().decode("utf-8")
-            data = urllib.request.urlopen(data)
-            data = numpy.asarray(bytearray(data.read()), dtype="uint8")
-            data = cv2.imdecode(data, cv2.IMREAD_COLOR)
-            cv2.imwrite(tempfile.gettempdir() + "\\lastimage.jpg", findfaces(data))
+            if data.startsWith("data:"):
+                data = urllib.request.urlopen(data)
+                data = numpy.asarray(bytearray(data.read()), dtype="uint8")
+                data = cv2.imdecode(data, cv2.IMREAD_COLOR)
+                cv2.imwrite(tempfile.gettempdir() + "\\lastimage.jpg", findfaces(data))
 
-            return "200 Ok"
+                return "200 Ok"
+            else:
+                return "400 Invalid request"
 
         @app.route("/get_image", methods=["GET"])
         @app.route("/get_image2", methods=["GET"])
         def get_image():
             image = cv2.imread(tempfile.gettempdir() + "\\lastimage.jpg")
 
-            if (image.any()):
+            if image.any():
                 (flag, encodedimage) = cv2.imencode(".jpg", image)
                 return flask.Response(bytearray(encodedimage), mimetype="image/jpeg")
             else:
@@ -164,11 +167,11 @@ if sys.argv.__len__() > 1:
     else:
         print("Usage [-webcam, --webcam (cameraid), --image (filename)]")
 
-        exit(1)
+        sys.exit(1)
 else:
     print("Usage [-stream, -webcam, --webcam (cameraid), --image (filename)]")
 
-    exit(1)
+    sys.exit(1)
 
 
 window = "Face Recognition"
