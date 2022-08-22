@@ -22,12 +22,13 @@
 
         const method = "random" // "perfect", "random"
 
-        const sample = 5000
+        const sample = 2000
 
-        const rotstep = 0.125
+        const rotstep = 0.25
         const powstep = 0.5
 
-        const showTesting = false
+        const showTesting = true
+
         const showDistance = false
 
         const levels = [
@@ -86,67 +87,69 @@
         simulate(levels[currentLevel])
 
         function simulate(level, ballx, bally) {
-            const balls = []
-            const finished = []
+            var balls = []
+            var best = null
+            var completed = false
 
-            for (var i = 0; i < sample; i++) {
-                var powx = (Math.random() * level.speed * 2) - level.speed
-                var powy = (Math.random() * level.speed * 2) - level.speed
+            if (method == "random") {
+                for (var i = 0; i < sample; i++) {
+                    var powx = (Math.random() * level.speed * 2) - level.speed
+                    var powy = (Math.random() * level.speed * 2) - level.speed
 
-                balls.push({
-                    x: (ballx == undefined ? level.data.indexOf(2) % level.width : ballx),
-                    y: (bally == undefined ? Math.round(level.data.indexOf(2) / level.width) : bally),
-                    velocity: {
-                        x: powx,
-                        y: powy
-                    },
-                    time: 0,
-                    distance: 0,
-                    startParams: {
-                        x: level.data.indexOf(2) % level.width,
-                        y: Math.floor(level.data.indexOf(2) / level.width),
+                    balls.push({
+                        x: (ballx == undefined ? level.data.indexOf(2) % level.width : ballx),
+                        y: (bally == undefined ? Math.round(level.data.indexOf(2) / level.width) : bally),
                         velocity: {
                             x: powx,
                             y: powy
+                        },
+                        time: 0,
+                        distance: 0,
+                        startParams: {
+                            x: level.data.indexOf(2) % level.width,
+                            y: Math.floor(level.data.indexOf(2) / level.width),
+                            velocity: {
+                                x: powx,
+                                y: powy
+                            }
                         }
+                    })
+                }
+            } else if (method == "perfect") {
+                var angle = 0
+                var power = powstep
+                while (power <= level.speed) {
+                    var theta = angle * (Math.PI / 180)
+                    var powx = Math.cos(theta) * power
+                    var powy = Math.sin(theta) * power
+
+                    angle += rotstep
+
+                    if (angle >= 360) {
+                        angle = 0
+
+                        power += powstep
                     }
-                })
 
+                    balls.push({
+                        x: level.data.indexOf(2) % level.width,
+                        y: Math.round(level.data.indexOf(2) / level.width),
+                        velocity: {
+                            x: powx,
+                            y: powy
+                        },
+                        time: 0,
+                        startParams: {
+                            x: level.data.indexOf(2) % level.width,
+                            y: Math.round(level.data.indexOf(2) / level.width),
+                            velocity: {
+                                x: powx,
+                                y: powy
+                            }
+                        }
+                    })
+                }
             }
-
-            // var angle = 0
-            // var power = powstep
-            // while (power < level.speed) {
-            //     var theta = angle * (Math.PI / 180)
-            //     var powx = Math.cos(theta) * power
-            //     var powy = Math.sin(theta) * power
-
-            //     angle += rotstep
-
-            //     if (angle >= 360) {
-            //         angle = 0
-
-            //         power += powstep
-            //     }
-
-            //     balls.push({
-            //         x: level.data.indexOf(2) % level.width,
-            //         y: Math.round(level.data.indexOf(2) / level.width),
-            //         velocity: {
-            //             x: powx,
-            //             y: powy
-            //         },
-            //         time: 0,
-            //         startParams: {
-            //             x: level.data.indexOf(2) % level.width,
-            //             y: Math.round(level.data.indexOf(2) / level.width),
-            //             velocity: {
-            //                 x: powx,
-            //                 y: powy
-            //             }
-            //         }
-            //     })
-            // }
 
             var startX = level.data.indexOf(3) % level.width
             var startY = Math.floor(level.data.indexOf(3) / level.width)
@@ -188,8 +191,6 @@
             }
 
             console.log("Simulating " + balls.length + " balls")
-
-            var best = null
 
             var renderer = setInterval(() => {
                 canvas.width = (level.width) * canvasScale
@@ -262,7 +263,7 @@
                         ball.velocity.y = 0
                     }
 
-                    if (finished.length > 1 && Math.abs(ball.velocity.x) <= F * 2 && Math.abs(ball.velocity.y) <= F * 2) {
+                    if (Math.abs(ball.velocity.x) <= F * 2 && Math.abs(ball.velocity.y) <= F * 2) {
                         balls.splice(balls.indexOf(ball), 1)
                     }
 
@@ -359,9 +360,8 @@
                         ball.velocity.y = 0
 
                         balls.splice(balls.indexOf(ball), 1)
-                        finished.push(ball)
 
-                        if (ball == best) {
+                        if (completed) {
                             console.log("Finished replaying, loading next level")
 
                             clearInterval(renderer)
@@ -372,43 +372,29 @@
                             simulate(levels[currentLevel])
 
                             return
+                        } else {
+                            best = ball
+                            completed = true
                         }
                     }
                     var done = true
                     for (var i = 0; i < balls.length; i++) {
                         if (balls[i].velocity.x != 0 || balls[i].velocity.y != 0) {
                             done = false
-
-                            return
                         }
                     }
 
-                    if (done && finished.length > 0) {
-                        best = finished[0]
-
-                        finished.forEach(ball => {
-                            if (ball.distance < best.distance) best = ball
-                        })
-
+                    if (completed && best != null) {
                         best = best.startParams
                         best.startParams = best
 
                         console.log("Found best path, replaying")
 
-                        balls.length = 0
-                        balls.push(best)
+                        balls = [best]
+
+                        best = null
                     } else if (done) {
-                        console.log("No path found in one move, trying from best spot")
-
-                        best = balls[0]
-                        balls.forEach(ball => {
-                            if (level.scores[Math.round(ball.x) + ((Math.round(ball.y) + 1) * level.width)] < level.scores[Math.round(best.x) + ((Math.round(best.y) + 1) * level.width)]) best = ball
-                        })
-
-                        clearInterval(renderer)
-                        clearInterval(updater)
-
-                        simulate(level, best.x, best.y)
+                        console.log("No path found.")
                     }
                 })
             }, 1000 / ups)
