@@ -1,8 +1,14 @@
 {
   "loader": "fabric",
-  "version": "1.19.1",
+  "versions": [
+    "1.19.2"
+  ],
+  "allowVersions": [
+    "1.19.1",
+    "1.19"
+  ],
   "type": "client",
-  "maxConcurrentDownloads": 5,
+  "maxConcurrentDownloads": 6,
   "addExtraMeta": true,
   "sortMods": true,
   "modsDir": "%appdata%/.minecraft/mods",
