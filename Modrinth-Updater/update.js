@@ -1,79 +1,97 @@
 const fs = require("fs")
 const crypto = require("crypto")
 
-import("node-fetch").then(fetch => {
-    fetch = fetch.default
+function reliableFetch(url, options) {
+    return new Promise((resolve, reject) => {
+        var timeout = 15
 
-    function reliableFetch(url, options) {
-        return new Promise((resolve, reject) => {
-            var timeout = 30
+        function download() {
+            var controller = new AbortController()
+            var timer = setTimeout(() => {
+                controller.abort()
+            }, timeout * 1000)
 
-            function download() {
-                var controller = new AbortController()
-                var timer = setTimeout(() => {
-                    controller.abort()
-                }, timeout * 1000)
+            fetch(url, { ...options, signal: controller.signal }).then(res => {
+                clearInterval(timer)
 
-                fetch(url, { ...options, signal: controller.signal }).then(res => {
-                    clearInterval(timer)
+                if (options.dataType == "text") {
+                    res.text().then(data => {
+                        resolve(data)
+                    })
+                } else if (options.dataType == "json") {
+                    res.text().then(data => {
+                        try {
+                            var json = JSON.parse(data)
 
-                    resolve(res)
-                }).catch(e => {
-                    if (e.type == "aborted") {
-                        if (options.out) {
-                            options.out("Retrying to fetch " + url + " with " + (timeout * 2) + " timeout")
-                        } else {
-                            console.warn("Retrying to fetch " + url + " with " + (timeout * 2) + " timeout")
+                            if (json.error) {
+                                if (json.error == "ratelimit_error") {
+                                    var secs = json.description.split(".")[1].replace(/[^0-9]/g, "")
+
+                                    if (options.out) {
+                                        options.out("Retrying to fetch " + url + " in " + secs + " seconds")
+                                    } else {
+                                        console.warn("Retrying to fetch " + url + " in " + secs + " seconds")
+                                    }
+
+                                    setTimeout(() => {
+                                        download()
+                                    }, secs * 1000)
+                                } else {
+                                    console.error(json.error + ": " + json.description)
+
+                                    process.exit(1)
+                                }
+                            } else {
+                                resolve(json)
+                            }
+                        } catch (e) {
+                            throw new Error("Received invalid json from '" + res.url + "'\n" + data)
                         }
-
-                        timeout = timeout * 2
-
-                        download()
+                    })
+                } else if (options.dataType == "buffer") {
+                    res.arrayBuffer().then(data => {
+                        resolve(Buffer.from(data))
+                    })
+                } else {
+                    resolve(res)
+                }
+            }).catch(e => {
+                if (e.type == "aborted") {
+                    if (options.out) {
+                        options.out("Retrying to fetch " + url + " with " + (timeout * 2) + " timeout")
                     } else {
-                        throw e
-                    }
-                })
-            }
-            download()
-        })
-    }
-
-    function getJson(res) {
-        return new Promise((resolve, reject) => {
-            res.text().then(data => {
-                try {
-                    var json = JSON.parse(data)
-
-                    if (json.error) {
-                        console.error(json.error + ": " + json.description)
-
-                        process.exit(1)
+                        console.warn("Retrying to fetch " + url + " with " + (timeout * 2) + " timeout")
                     }
 
-                    resolve(json)
-                } catch (e) {
-                    throw new Error("Received invalid json string '" + data + "' from '" + res.url + "'")
+                    timeout = timeout * 2
+
+                    download()
+                } else {
+                    throw e
                 }
             })
-        })
-    }
-
-    var config
-    if (fs.existsSync("./update.json")) {
-        try {
-            config = JSON.parse(fs.readFileSync("./update.json"))
-        } catch {
-            return console.error("\"update.json\" is not a valid json file")
         }
-    } else {
-        return console.error("\"update.json\" file does not exist")
-    }
+        download()
+    })
+}
 
+var config
+if (fs.existsSync("./update.json")) {
+    try {
+        config = JSON.parse(fs.readFileSync("./update.json"))
+    } catch {
+        return console.error("\"update.json\" is not a valid json file")
+    }
+} else {
+    return console.error("\"update.json\" file does not exist")
+}
+
+if (process.argv.length > 2) {
     var mode = process.argv[2]
 
     if (mode.toLowerCase() == "add") {
         for (var i = 3; i < process.argv.length; i++) {
-            reliableFetch("https://api.modrinth.com/v2/project/" + process.argv[i].replace("https://modrinth.com/mod/", "")).then(res => getJson(res)).then(mod => {
+            reliableFetch("https://api.modrinth.com/v2/project/" + process.argv[i].replace("https://modrinth.com/mod/", ""), { dataType: "json" }).then(mod => {
                 if (config.addExtraMeta) {
                     config.mods.push({ id: mod.id, slug: mod.slug, name: mod.title })
                 } else {
@@ -98,35 +116,55 @@ import("node-fetch").then(fetch => {
             })
         }
     } else if (mode.toLowerCase() == "remove") {
-        config.mods.forEach(mod => {
-            if (mod.id.toLowerCase() == process.argv[3].replace("https://modrinth.com/mod/", "").toLowerCase() || (mod.slug != null && mod.slug.toLowerCase() == process.argv[3].replace("https://modrinth.com/mod/", "").toLowerCase())) {
-                config.mods.splice(config.mods.indexOf(mod), 1)
+        for (var i = 3; i < process.argv.length; i++) {
+            config.mods.forEach(mod => {
+                if (mod.id.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase() || (mod.slug != null && mod.slug.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase())) {
+                    config.mods.splice(config.mods.indexOf(mod), 1)
 
-                console.log("Successfully removed " + mod.name + " (" + mod.id + ")")
+                    console.log("Successfully removed " + mod.name + " (" + mod.id + ")")
 
-                if (config.sortMods && config.addExtraMeta) {
-                    config.mods.sort((a, b) => {
-                        if ((a.name || a) < (b.name || b)) {
-                            return -1
-                        } else if ((a.name || a) > (b.name || b)) {
-                            return 1
-                        } else {
-                            return 0
-                        }
-                    })
+                    if (config.sortMods && config.addExtraMeta) {
+                        config.mods.sort((a, b) => {
+                            if ((a.name || a) < (b.name || b)) {
+                                return -1
+                            } else if ((a.name || a) > (b.name || b)) {
+                                return 1
+                            } else {
+                                return 0
+                            }
+                        })
+                    }
+
+                    fs.writeFileSync("./update.json", JSON.stringify(config, null, 2))
                 }
-
-                fs.writeFileSync("./update.json", JSON.stringify(config, null, 2))
-            }
-        })
+            })
+        }
     } else if (mode.toLowerCase() == "list") {
-        config.mods.forEach(mod => {
-            if (config.addExtraMeta) {
-                console.log(mod.name + " (" + mod.slug + ")")
+        if (config.addExtraMeta) {
+            if (process.argv.length > 3) {
+                var printed = []
+
+                config.mods.forEach(mod => {
+                    if (mod.name.toLowerCase().startsWith(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().startsWith(process.argv[3].toLowerCase())) {
+                        printed.push(mod.slug)
+
+                        console.log(mod.name + " (" + mod.slug + ")")
+                    }
+                })
+
+                config.mods.forEach(mod => {
+                    if ((mod.name.toLowerCase().includes(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().includes(process.argv[3].toLowerCase())) && !printed.includes(mod.slug)) {
+                        console.log(mod.name + " (" + mod.slug + ")")
+                    }
+                })
             } else {
-                console.error("Can't list when addExtraMeta is false")
+                config.mods.forEach(mod => {
+                    console.log(mod.name + " (" + mod.slug + ")")
+                })
             }
-        })
+        } else {
+            console.error("Can't list when addExtraMeta is false")
+        }
     } else if (mode.toLowerCase() == "update") {
         var mods = config.mods.length
         var fetching = 0
@@ -142,7 +180,11 @@ import("node-fetch").then(fetch => {
             console.clear()
 
             for (var i = 5; i > 0; i--) {
-                console.log(messages[(messages.length) - i])
+                if (messages[(messages.length) - i] != undefined) {
+                    console.log(messages[(messages.length) - i])
+                } else {
+                    console.log("")
+                }
             }
 
             console.log("Total: " + mods)
@@ -156,11 +198,11 @@ import("node-fetch").then(fetch => {
 
                 complete()
             }
-        }, 1000);
+        }, 500);
 
         var i = 0
         function next() {
-            if (i == config.mods.length) {
+            if (i >= config.mods.length) {
                 return
             }
 
@@ -169,22 +211,38 @@ import("node-fetch").then(fetch => {
 
             fetching++
 
-            reliableFetch("https://api.modrinth.com/v2/project/" + (id.id || id), { out: (msg) => { messages.push(msg) } }).then(res => getJson(res)).then(mod => {
-                if (config.addExtraMeta) {
-                    config.mods[config.mods.indexOf(id)] = { id: mod.id, slug: mod.slug, name: mod.title, overrides: id.overrides }
-                } else {
-                    config.mods[config.mods.indexOf(id)] = mod.id
-                }
+            reliableFetch("https://api.modrinth.com/v2/project/" + (id.id || mod) + "/version", { dataType: "json", out: (msg) => { messages.push(msg) } }).then(versions => {
+                fetched++
 
-                reliableFetch("https://api.modrinth.com/v2/project/" + (mod.id || mod) + "/version", { out: (msg) => { messages.push(msg) } }).then(res => getJson(res)).then(versions => {
-                    fetched++
+                var latest = null
 
-                    var latest = null
+                versions.forEach(version => {
+                    if (version.loaders.includes(config.loader)) {
+                        if (id.overrides != undefined && id.overrides.versions != undefined) {
+                            id.overrides.versions.forEach(configVersion => {
+                                if (version.game_versions.includes(configVersion)) {
+                                    if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                        latest = version
+                                    }
+                                }
+                            })
+                        } else {
+                            config.versions.forEach(configVersion => {
+                                if (version.game_versions.includes(configVersion)) {
+                                    if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
+                                        latest = version
+                                    }
+                                }
+                            })
+                        }
+                    }
+                })
 
+                if (latest == null) {
                     versions.forEach(version => {
                         if (version.loaders.includes(config.loader)) {
-                            if (id.overrides != undefined && id.overrides.versions != undefined) {
-                                id.overrides.versions.forEach(configVersion => {
+                            if (id.overrides != undefined && id.overrides.allowVersions != undefined) {
+                                id.overrides.allowVersions.forEach(configVersion => {
                                     if (version.game_versions.includes(configVersion)) {
                                         if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
                                             latest = version
@@ -192,7 +250,7 @@ import("node-fetch").then(fetch => {
                                     }
                                 })
                             } else {
-                                config.versions.forEach(configVersion => {
+                                config.allowVersions.forEach(configVersion => {
                                     if (version.game_versions.includes(configVersion)) {
                                         if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
                                             latest = version
@@ -202,77 +260,55 @@ import("node-fetch").then(fetch => {
                             }
                         }
                     })
+                }
 
-                    if (latest == null) {
-                        versions.forEach(version => {
-                            if (version.loaders.includes(config.loader)) {
-                                if (id.overrides != undefined && id.overrides.allowVersions != undefined) {
-                                    id.overrides.allowVersions.forEach(configVersion => {
-                                        if (version.game_versions.includes(configVersion)) {
-                                            if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
-                                                latest = version
-                                            }
-                                        }
-                                    })
-                                } else {
-                                    config.allowVersions.forEach(configVersion => {
-                                        if (version.game_versions.includes(configVersion)) {
-                                            if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
-                                                latest = version
-                                            }
-                                        }
-                                    })
-                                }
-                            }
-                        })
-                    }
+                var foundVersion = false
 
-                    var foundVersion = false
+                if (latest != null) {
+                    latest.files.forEach(file => {
+                        if (file.primary || latest.files.length == 1) {
+                            foundVersion = true
 
-                    if (latest != null) {
-                        latest.files.forEach(file => {
-                            if (file.primary || latest.files.length == 1) {
-                                foundVersion = true
+                            if (!fs.existsSync(config.modsDir + "/" + (id.slug) + ".jar")) {
+                                downloading++
 
-                                if (!fs.existsSync(config.modsDir + "/" + (mod.slug) + ".jar")) {
+                                reliableFetch(file.url, { dataType: "buffer", out: (msg) => { messages.push(msg) } }).then(data => {
+                                    modFiles.push(id.slug + ".jar")
+
+                                    fs.writeFileSync(config.modsDir + "/" + id.slug + ".jar", data)
+
+                                    downloaded++
+
+                                    next()
+                                })
+                            } else {
+                                if (file.hashes.sha512 != crypto.createHash("sha512").update(fs.readFileSync(config.modsDir + "/" + id.slug + ".jar")).digest("hex")) {
                                     downloading++
 
-                                    reliableFetch(file.url, { out: (msg) => { messages.push(msg) } }).then(res => res.buffer()).then(data => {
-                                        modFiles.push(mod.slug + ".jar")
-                                        fs.writeFileSync(config.modsDir + "/" + mod.slug + ".jar", data)
+                                    reliableFetch(file.url, { dataType: "buffer", out: (msg) => { messages.push(msg) } }).then(data => {
+                                        modFiles.push(id.slug + ".jar")
+
+                                        fs.writeFileSync(config.modsDir + "/" + id.slug + ".jar", data)
 
                                         downloaded++
 
                                         next()
                                     })
                                 } else {
-                                    if (file.hashes.sha512 != crypto.createHash("sha512").update(fs.readFileSync(config.modsDir + "/" + mod.slug + ".jar")).digest("hex")) {
-                                        downloading++
+                                    modFiles.push(id.slug + ".jar")
 
-                                        reliableFetch(file.url, { out: (msg) => { messages.push(msg) } }).then(res => res.buffer()).then(data => {
-                                            modFiles.push(mod.slug + ".jar")
-                                            fs.writeFileSync(config.modsDir + "/" + mod.slug + ".jar", data)
-
-                                            downloaded++
-
-                                            next()
-                                        })
-                                    } else {
-                                        modFiles.push(mod.slug + ".jar")
-
-                                        next()
-                                    }
+                                    next()
                                 }
                             }
-                        })
-                    }
+                        }
+                    })
+                }
 
-                    if (!foundVersion) {
-                        messages.push("Could not find version for " + mod.title)
+                if (!foundVersion) {
+                    messages.push("Could not find version for " + id.name)
 
-                        next()
-                    }
-                })
+                    next()
+                }
             })
         }
 
@@ -285,7 +321,7 @@ import("node-fetch").then(fetch => {
 
             mods.forEach(mod => {
                 if (!mod.startsWith("manual-") && !modFiles.includes(mod)) {
-                    fs.unlinkSync(config.modsDir + "/" + mod)
+                    fs.rmSync(config.modsDir + "/" + mod)
                 }
             })
 
@@ -328,12 +364,12 @@ import("node-fetch").then(fetch => {
         }
 
         if (!fs.existsSync("./cache.json")) {
-            fs.writeFileSync("./cache.json", "[]")
+            fs.writeFileSync("./cache.json", JSON.stringify({ search: [] }))
         }
 
         var cache = JSON.parse(fs.readFileSync("./cache.json"))
 
-        reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=0&facets=" + JSON.stringify(facets)).then(res => getJson(res)).then(mods => {
+        reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=0&facets=" + JSON.stringify(facets), { dataType: "json" }).then(mods => {
             mods.hits.forEach(mod => {
                 var found = false
 
@@ -341,8 +377,8 @@ import("node-fetch").then(fetch => {
                     if (mod.project_id == cached.id) {
                         found = true
 
-                        if (new Date(mod.date_modified).getTime() > cached.lastchange) {
-                            cache.search[cache.search.indexOf(cached)].lastchange = new Date(mod.date_modified).getTime()
+                        if (new Date(mod.date_modified).getTime() > cached.lastChange) {
+                            cache.search[cache.search.indexOf(cached)].lastChange = new Date(mod.date_modified).getTime()
 
                             if (type == "updated" || type == "changed" || type == "all") {
                                 console.log("Found new update for " + mod.title + " https://modrinth.com/mod/" + mod.slug)
@@ -356,11 +392,11 @@ import("node-fetch").then(fetch => {
                         console.log("New mod found " + mod.title + " https://modrinth.com/mod/" + mod.slug)
                     }
 
-                    cache.search.push({ id: mod.project_id, lastchange: new Date(mod.date_modified).getTime() })
+                    cache.search.push({ id: mod.project_id, lastChange: new Date(mod.date_modified).getTime() })
                 }
             })
 
-            fs.writeFileSync("./cache.json", JSON.stringify(cache, null, 2))
+            fs.writeFileSync("./cache.json", JSON.stringify(cache))
         })
     } else if (mode.toLowerCase() == "cacheall") {
         var facets = [["project_type:mod"], ["categories:" + config.loader]]
@@ -381,13 +417,13 @@ import("node-fetch").then(fetch => {
         }
 
         if (!fs.existsSync("./cache.json")) {
-            fs.writeFileSync("./cache.json", "[]")
+            fs.writeFileSync("./cache.json", "{\"search\":[]}")
         }
 
         var cache = JSON.parse(fs.readFileSync("./cache.json"))
 
         function get(page) {
-            reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=" + (page * 100) + "&facets=" + JSON.stringify(facets)).then(res => getJson(res)).then(mods => {
+            reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=" + (page * 100) + "&facets=" + JSON.stringify(facets), { dataType: "json" }).then(mods => {
                 if (mods.hits.length > 0) {
                     mods.hits.forEach(mod => {
                         var found = false
@@ -396,28 +432,27 @@ import("node-fetch").then(fetch => {
                             if (mod.project_id == cached.id) {
                                 found = true
 
-                                if (new Date(mod.date_modified).getTime() > cached.lastchange) {
-                                    cache.search[cache.search.indexOf(cached)].lastchange = new Date(mod.date_modified).getTime()
+                                if (new Date(mod.date_modified).getTime() > cached.lastChange) {
+                                    cache.search[cache.search.indexOf(cached)].lastChange = new Date(mod.date_modified).getTime()
                                 }
                             }
                         })
 
                         if (!found) {
-                            cache.search.push({ id: mod.project_id, lastchange: new Date(mod.date_modified).getTime() })
+                            cache.search.push({ id: mod.project_id, lastChange: new Date(mod.date_modified).getTime() })
                         }
                     })
 
-                    fs.writeFileSync("./cache.json", JSON.stringify(cache, null, 2))
+                    fs.writeFileSync("./cache.json", JSON.stringify(cache))
 
                     get(page + 1)
                 }
             })
         }
         get(0)
-    } else if (mode.toLowerCase() == "backup") {
-        fs.writeFileSync("./update-backup.json", fs.readFileSync("./update.json"))
-        fs.writeFileSync("./cache-backup.json", fs.readFileSync("./cache.json"))
     } else {
-        return console.error("Unknown mode \"" + mode + "\"")
+        return console.error("Unknown option \"" + mode + "\"\nTry one of \"check\", \"update\", \"add\", \"remove\", \"list\", \"cacheAll\"")
     }
-})
+} else {
+    return console.error("Must pass an option\nTry one of \"check\", \"update\", \"add\", \"remove\", \"list\", \"cacheAll\"")
+}
