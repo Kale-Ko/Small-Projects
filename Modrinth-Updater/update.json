@@ -1,16 +1,20 @@
 {
-  "loader": "fabric",
-  "versions": [
-    "1.19.2"
-  ],
-  "allowVersions": [
-    "1.19.1",
-    "1.19"
-  ],
-  "type": "client",
-  "maxConcurrentDownloads": 6,
-  "addExtraMeta": true,
-  "sortMods": true,
-  "modsDir": "%appdata%/.minecraft/mods",
-  "mods": []
+  "currentProfile": "modded",
+  "profiles": {
+    "modded": {
+      "loader": "fabric",
+      "versions": [
+        "1.19.2"
+      ],
+      "allowVersions": [
+        "1.19.1",
+        "1.19"
+      ],
+      "type": "both",
+      "maxConcurrentDownloads": 6,
+      "sortMods": true,
+      "modsDir": "%appdata%/.minecraft/mods",
+      "mods": []
+    }
+  }
 }
