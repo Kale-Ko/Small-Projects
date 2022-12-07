@@ -25,7 +25,7 @@ function reliableFetch(url, options) {
 
                             if (json.error) {
                                 if (json.error == "ratelimit_error") {
-                                    var secs = json.description.split(".")[1].replace(/[^0-9]/g, "")
+                                    var secs = parseInt(json.description.split(".")[1].replace(/[^0-9]/g, "")) + 1
 
                                     if (options.out) {
                                         options.out("Retrying to fetch " + url + " in " + secs + " seconds")
@@ -86,22 +86,26 @@ if (fs.existsSync("./update.json")) {
     return console.error("\"update.json\" file does not exist")
 }
 
+var profile = config.profiles[config.currentProfile]
+
 if (process.argv.length > 2) {
     var mode = process.argv[2]
 
-    if (mode.toLowerCase() == "add") {
+    if (mode.toLowerCase() == "use") {
+        if (config.profiles[process.argv[3]] != undefined) {
+            config.currentProfile = process.argv[3]
+
+            fs.writeFileSync("./update.json", JSON.stringify(config, null, 2))
+        }
+    } else if (mode.toLowerCase() == "add") {
         for (var i = 3; i < process.argv.length; i++) {
             reliableFetch("https://api.modrinth.com/v2/project/" + process.argv[i].replace("https://modrinth.com/mod/", ""), { dataType: "json" }).then(mod => {
-                if (config.addExtraMeta) {
-                    config.mods.push({ id: mod.id, slug: mod.slug, name: mod.title })
-                } else {
-                    config.mods.push(mod.id)
-                }
+                profile.mods.push({ id: mod.id, slug: mod.slug, name: mod.title })
 
                 console.log("Successfully added " + mod.title + " (" + mod.id + ")")
 
-                if (config.sortMods && config.addExtraMeta) {
-                    config.mods.sort((a, b) => {
+                if (profile.sortMods) {
+                    profile.mods.sort((a, b) => {
                         if ((a.name || a) < (b.name || b)) {
                             return -1
                         } else if ((a.name || a) > (b.name || b)) {
@@ -117,14 +121,14 @@ if (process.argv.length > 2) {
         }
     } else if (mode.toLowerCase() == "remove") {
         for (var i = 3; i < process.argv.length; i++) {
-            config.mods.forEach(mod => {
+            profile.mods.forEach(mod => {
                 if (mod.id.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase() || (mod.slug != null && mod.slug.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase())) {
-                    config.mods.splice(config.mods.indexOf(mod), 1)
+                    profile.mods.splice(profile.mods.indexOf(mod), 1)
 
                     console.log("Successfully removed " + mod.name + " (" + mod.id + ")")
 
-                    if (config.sortMods && config.addExtraMeta) {
-                        config.mods.sort((a, b) => {
+                    if (profile.sortMods) {
+                        profile.mods.sort((a, b) => {
                             if ((a.name || a) < (b.name || b)) {
                                 return -1
                             } else if ((a.name || a) > (b.name || b)) {
@@ -140,33 +144,43 @@ if (process.argv.length > 2) {
             })
         }
     } else if (mode.toLowerCase() == "list") {
-        if (config.addExtraMeta) {
-            if (process.argv.length > 3) {
-                var printed = []
+        if (process.argv.length > 3) {
+            var printed = []
 
-                config.mods.forEach(mod => {
-                    if (mod.name.toLowerCase().startsWith(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().startsWith(process.argv[3].toLowerCase())) {
-                        printed.push(mod.slug)
+            profile.mods.forEach(mod => {
+                if (mod.name.toLowerCase().startsWith(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().startsWith(process.argv[3].toLowerCase())) {
+                    printed.push(mod.slug)
 
-                        console.log(mod.name + " (" + mod.slug + ")")
-                    }
-                })
-
-                config.mods.forEach(mod => {
-                    if ((mod.name.toLowerCase().includes(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().includes(process.argv[3].toLowerCase())) && !printed.includes(mod.slug)) {
-                        console.log(mod.name + " (" + mod.slug + ")")
-                    }
-                })
-            } else {
-                config.mods.forEach(mod => {
                     console.log(mod.name + " (" + mod.slug + ")")
-                })
-            }
+                }
+            })
+
+            profile.mods.forEach(mod => {
+                if ((mod.name.toLowerCase().includes(process.argv[3].toLowerCase()) || mod.slug.toLowerCase().includes(process.argv[3].toLowerCase())) && !printed.includes(mod.slug)) {
+                    console.log(mod.name + " (" + mod.slug + ")")
+                }
+            })
         } else {
-            console.error("Can't list when addExtraMeta is false")
+            profile.mods.forEach(mod => {
+                console.log(mod.name + " (" + mod.slug + ")")
+            })
         }
+    } else if (mode.toLowerCase() == "fix") {
+        var mods = []
+        var found = []
+
+        profile.mods.forEach(mod => {
+            if (!found.includes(mod.id)) {
+                mods.push(mod)
+                found.push(mod.id)
+            }
+        })
+
+        profile.mods = mods
+
+        fs.writeFileSync("./update.json", JSON.stringify(config, null, 2))
     } else if (mode.toLowerCase() == "update") {
-        var mods = config.mods.length
+        var mods = profile.mods.length
         var fetching = 0
         var fetched = 0
         var downloading = 0
@@ -202,22 +216,22 @@ if (process.argv.length > 2) {
 
         var i = 0
         function next() {
-            if (i >= config.mods.length) {
+            if (i >= profile.mods.length) {
                 return
             }
 
-            var id = config.mods[i]
+            var id = profile.mods[i]
             i++
 
             fetching++
 
-            reliableFetch("https://api.modrinth.com/v2/project/" + (id.id || mod) + "/version", { dataType: "json", out: (msg) => { messages.push(msg) } }).then(versions => {
+            reliableFetch("https://api.modrinth.com/v2/project/" + id.id + "/version", { dataType: "json", out: (msg) => { messages.push(msg) } }).then(versions => {
                 fetched++
 
                 var latest = null
 
                 versions.forEach(version => {
-                    if (version.loaders.includes(config.loader)) {
+                    if (version.loaders.includes(profile.loader)) {
                         if (id.overrides != undefined && id.overrides.versions != undefined) {
                             id.overrides.versions.forEach(configVersion => {
                                 if (version.game_versions.includes(configVersion)) {
@@ -227,7 +241,7 @@ if (process.argv.length > 2) {
                                 }
                             })
                         } else {
-                            config.versions.forEach(configVersion => {
+                            profile.versions.forEach(configVersion => {
                                 if (version.game_versions.includes(configVersion)) {
                                     if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
                                         latest = version
@@ -240,7 +254,7 @@ if (process.argv.length > 2) {
 
                 if (latest == null) {
                     versions.forEach(version => {
-                        if (version.loaders.includes(config.loader)) {
+                        if (version.loaders.includes(profile.loader)) {
                             if (id.overrides != undefined && id.overrides.allowVersions != undefined) {
                                 id.overrides.allowVersions.forEach(configVersion => {
                                     if (version.game_versions.includes(configVersion)) {
@@ -250,7 +264,7 @@ if (process.argv.length > 2) {
                                     }
                                 })
                             } else {
-                                config.allowVersions.forEach(configVersion => {
+                                profile.allowVersions.forEach(configVersion => {
                                     if (version.game_versions.includes(configVersion)) {
                                         if (latest == null || new Date(version.date_published).getTime() > new Date(latest.date_published).getTime()) {
                                             latest = version
@@ -269,26 +283,26 @@ if (process.argv.length > 2) {
                         if (file.primary || latest.files.length == 1) {
                             foundVersion = true
 
-                            if (!fs.existsSync(config.modsDir + "/" + (id.slug) + ".jar")) {
+                            if (!fs.existsSync(profile.modsDir + "/" + (id.slug) + ".jar")) {
                                 downloading++
 
                                 reliableFetch(file.url, { dataType: "buffer", out: (msg) => { messages.push(msg) } }).then(data => {
                                     modFiles.push(id.slug + ".jar")
 
-                                    fs.writeFileSync(config.modsDir + "/" + id.slug + ".jar", data)
+                                    fs.writeFileSync(profile.modsDir + "/" + id.slug + ".jar", data)
 
                                     downloaded++
 
                                     next()
                                 })
                             } else {
-                                if (file.hashes.sha512 != crypto.createHash("sha512").update(fs.readFileSync(config.modsDir + "/" + id.slug + ".jar")).digest("hex")) {
+                                if (file.hashes.sha512 != crypto.createHash("sha512").update(fs.readFileSync(profile.modsDir + "/" + id.slug + ".jar")).digest("hex")) {
                                     downloading++
 
                                     reliableFetch(file.url, { dataType: "buffer", out: (msg) => { messages.push(msg) } }).then(data => {
                                         modFiles.push(id.slug + ".jar")
 
-                                        fs.writeFileSync(config.modsDir + "/" + id.slug + ".jar", data)
+                                        fs.writeFileSync(profile.modsDir + "/" + id.slug + ".jar", data)
 
                                         downloaded++
 
@@ -312,21 +326,21 @@ if (process.argv.length > 2) {
             })
         }
 
-        for (var i2 = 0; i2 < config.maxConcurrentDownloads; i2++) {
+        for (var i2 = 0; i2 < profile.maxConcurrentDownloads; i2++) {
             next()
         }
 
         function complete() {
-            var mods = fs.readdirSync(config.modsDir)
+            var mods = fs.readdirSync(profile.modsDir)
 
             mods.forEach(mod => {
                 if (!mod.startsWith("manual-") && !modFiles.includes(mod)) {
-                    fs.rmSync(config.modsDir + "/" + mod)
+                    fs.rmSync(profile.modsDir + "/" + mod)
                 }
             })
 
-            if (config.sortMods && config.addExtraMeta) {
-                config.mods.sort((a, b) => {
+            if (profile.sortMods) {
+                profile.mods.sort((a, b) => {
                     if (a.name > b.name) {
                         return 1
                     } else if (a.name < b.name) {
@@ -346,19 +360,19 @@ if (process.argv.length > 2) {
             type = "all"
         }
 
-        var facets = [["project_type:mod"], ["categories:" + config.loader]]
+        var facets = [["project_type:mod"], ["categories:" + profile.loader]]
 
-        config.versions.forEach(version => {
+        profile.versions.forEach(version => {
             facets.push(["versions:" + version])
         })
 
-        if (config.type == "client") {
+        if (profile.type == "client") {
             facets.push(["client_side:optional", "client_side:required"])
             facets.push(["server_side:optional", "server_side:unsupported"])
-        } else if (config.type == "server") {
+        } else if (profile.type == "server") {
             facets.push(["server_side:optional", "server_side:required"])
             facets.push(["client_side:optional", "client_side:unsupported"])
-        } else if (config.type == "both") {
+        } else if (profile.type == "both") {
             facets.push(["client_side:optional", "client_side:required"])
             facets.push(["server_side:optional", "server_side:required"])
         }
@@ -398,20 +412,65 @@ if (process.argv.length > 2) {
 
             fs.writeFileSync("./cache.json", JSON.stringify(cache))
         })
-    } else if (mode.toLowerCase() == "cacheall") {
-        var facets = [["project_type:mod"], ["categories:" + config.loader]]
+    } else if (mode.toLowerCase() == "checksupport") {
+        var tVersion = process.argv[3]
 
-        config.versions.forEach(version => {
+        var supported = 0
+        var checked = 0
+        var total = profile.mods.length
+
+        if (tVersion != undefined) {
+            var i = 0
+            function next() {
+                if (i >= profile.mods.length) {
+                    return
+                }
+
+                var id = profile.mods[i]
+                i++
+
+                reliableFetch("https://api.modrinth.com/v2/project/" + id.id + "/version", { dataType: "json" }).then(versions => {
+                    checked++
+
+                    for (var version of versions) {
+                        if (version.game_versions.includes(tVersion)) {
+                            supported++
+
+                            break
+                        }
+                    }
+
+                    if (checked == total) {
+                        complete()
+                    } else {
+                        next()
+                    }
+                })
+            }
+
+            for (var i2 = 0; i2 < profile.maxConcurrentDownloads; i2++) {
+                next()
+            }
+
+            function complete() {
+                console.log((Math.round((supported / total) * 10000) / 100) + "%")
+                console.log(supported + " / " + total)
+            }
+        }
+    } else if (mode.toLowerCase() == "cacheall") {
+        var facets = [["project_type:mod"], ["categories:" + profile.loader]]
+
+        profile.versions.forEach(version => {
             facets.push(["versions:" + version])
         })
 
-        if (config.type == "client") {
+        if (profile.type == "client") {
             facets.push(["client_side:optional", "client_side:required"])
             facets.push(["server_side:optional", "server_side:unsupported"])
-        } else if (config.type == "server") {
+        } else if (profile.type == "server") {
             facets.push(["server_side:optional", "server_side:required"])
             facets.push(["client_side:optional", "client_side:unsupported"])
-        } else if (config.type == "both") {
+        } else if (profile.type == "both") {
             facets.push(["client_side:optional", "client_side:required"])
             facets.push(["server_side:optional", "server_side:required"])
         }
