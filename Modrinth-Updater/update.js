@@ -100,15 +100,15 @@ if (process.argv.length > 2) {
     } else if (mode.toLowerCase() == "add") {
         for (var i = 3; i < process.argv.length; i++) {
             reliableFetch("https://api.modrinth.com/v2/project/" + process.argv[i].replace("https://modrinth.com/mod/", ""), { dataType: "json" }).then(mod => {
-                profile.mods.push({ id: mod.id, slug: mod.slug, name: mod.title })
+                profile.mods.push({ id: mod.id, slug: mod.slug.trim(), name: mod.title.trim() })
 
-                console.log("Successfully added " + mod.title + " (" + mod.id + ")")
+                console.log("Successfully added " + mod.title.trim() + " (" + mod.id + ")")
 
                 if (profile.sortMods) {
                     profile.mods.sort((a, b) => {
-                        if ((a.name || a) < (b.name || b)) {
+                        if (a.name < b.name) {
                             return -1
-                        } else if ((a.name || a) > (b.name || b)) {
+                        } else if (a.name > b.name) {
                             return 1
                         } else {
                             return 0
@@ -122,16 +122,16 @@ if (process.argv.length > 2) {
     } else if (mode.toLowerCase() == "remove") {
         for (var i = 3; i < process.argv.length; i++) {
             profile.mods.forEach(mod => {
-                if (mod.id.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase() || (mod.slug != null && mod.slug.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase())) {
+                if (mod.id.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase() || mod.slug.toLowerCase() == process.argv[i].replace("https://modrinth.com/mod/", "").toLowerCase()) {
                     profile.mods.splice(profile.mods.indexOf(mod), 1)
 
                     console.log("Successfully removed " + mod.name + " (" + mod.id + ")")
 
                     if (profile.sortMods) {
                         profile.mods.sort((a, b) => {
-                            if ((a.name || a) < (b.name || b)) {
+                            if (a.name < b.name) {
                                 return -1
-                            } else if ((a.name || a) > (b.name || b)) {
+                            } else if (a.name > b.name) {
                                 return 1
                             } else {
                                 return 0
@@ -171,10 +171,22 @@ if (process.argv.length > 2) {
 
         profile.mods.forEach(mod => {
             if (!found.includes(mod.id)) {
-                mods.push(mod)
+                mods.push({ id: mod.id, slug: mod.slug.trim(), name: mod.name.trim(), overrides: mod.overrides })
                 found.push(mod.id)
             }
         })
+
+        if (profile.sortMods) {
+            mods.sort((a, b) => {
+                if (a.name < b.name) {
+                    return -1
+                } else if (a.name > b.name) {
+                    return 1
+                } else {
+                    return 0
+                }
+            })
+        }
 
         profile.mods = mods
 
@@ -185,15 +197,14 @@ if (process.argv.length > 2) {
         var fetched = 0
         var downloading = 0
         var downloaded = 0
+        var messages = []
 
         var modFiles = []
-
-        var messages = []
 
         var logger = setInterval(() => {
             console.clear()
 
-            for (var i = 5; i > 0; i--) {
+            for (var i = 12; i > 0; i--) {
                 if (messages[(messages.length) - i] != undefined) {
                     console.log(messages[(messages.length) - i])
                 } else {
@@ -201,11 +212,11 @@ if (process.argv.length > 2) {
                 }
             }
 
-            console.log("Total: " + mods)
             console.log("Fetching: " + fetching)
             console.log("Fetched: " + fetched)
             console.log("Downloading: " + downloading)
             console.log("Downloaded: " + downloaded)
+            console.log(Math.round((((fetching / mods) / 5) + ((fetched / mods) / 2.5) + ((!isNaN(downloaded / downloading) ? (downloaded / downloading) : 1) / 2.5)) * 100) + "%")
 
             if (fetched == mods && downloaded == downloading) {
                 clearInterval(logger)
@@ -356,7 +367,7 @@ if (process.argv.length > 2) {
     } else if (mode.toLowerCase() == "check") {
         var type = process.argv[3]
 
-        if (type != "new" && type != "updated" && type != "changed" && type != "all") {
+        if (type != "new" && type != "updated" && type != "changed") {
             type = "all"
         }
 
@@ -383,35 +394,42 @@ if (process.argv.length > 2) {
 
         var cache = JSON.parse(fs.readFileSync("./cache.json"))
 
-        reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=0&facets=" + JSON.stringify(facets), { dataType: "json" }).then(mods => {
-            mods.hits.forEach(mod => {
-                var found = false
+        function get(page) {
+            reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=" + (page * 100) + "&facets=" + JSON.stringify(facets), { dataType: "json" }).then(mods => {
+                if (mods.hits.length > 0) {
+                    mods.hits.forEach(mod => {
+                        var found = false
 
-                cache.search.forEach(cached => {
-                    if (mod.project_id == cached.id) {
-                        found = true
+                        cache.search.forEach(cached => {
+                            if (mod.project_id == cached.id) {
+                                found = true
 
-                        if (new Date(mod.date_modified).getTime() > cached.lastChange) {
-                            cache.search[cache.search.indexOf(cached)].lastChange = new Date(mod.date_modified).getTime()
+                                if (new Date(mod.date_modified).getTime() > cached.lastChange) {
+                                    cache.search[cache.search.indexOf(cached)].lastChange = new Date(mod.date_modified).getTime()
 
-                            if (type == "updated" || type == "changed" || type == "all") {
-                                console.log("Found new update for " + mod.title + " https://modrinth.com/mod/" + mod.slug)
+                                    if (type == "updated" || type == "changed" || type == "all") {
+                                        console.log("Found new update for " + mod.title + " https://modrinth.com/mod/" + mod.slug)
+                                    }
+                                }
                             }
+                        })
+
+                        if (!found) {
+                            if (type == "new" || type == "all") {
+                                console.log("New mod found " + mod.title + " https://modrinth.com/mod/" + mod.slug)
+                            }
+
+                            cache.search.push({ id: mod.project_id, lastChange: new Date(mod.date_modified).getTime() })
                         }
-                    }
-                })
+                    })
 
-                if (!found) {
-                    if (type == "new" || type == "all") {
-                        console.log("New mod found " + mod.title + " https://modrinth.com/mod/" + mod.slug)
-                    }
+                    fs.writeFileSync("./cache.json", JSON.stringify(cache))
 
-                    cache.search.push({ id: mod.project_id, lastChange: new Date(mod.date_modified).getTime() })
+                    get(page + 1)
                 }
             })
-
-            fs.writeFileSync("./cache.json", JSON.stringify(cache))
-        })
+        }
+        get(0)
     } else if (mode.toLowerCase() == "checksupport") {
         var tVersion = process.argv[3]
 
@@ -457,61 +475,9 @@ if (process.argv.length > 2) {
                 console.log(supported + " / " + total)
             }
         }
-    } else if (mode.toLowerCase() == "cacheall") {
-        var facets = [["project_type:mod"], ["categories:" + profile.loader]]
-
-        profile.versions.forEach(version => {
-            facets.push(["versions:" + version])
-        })
-
-        if (profile.type == "client") {
-            facets.push(["client_side:optional", "client_side:required"])
-            facets.push(["server_side:optional", "server_side:unsupported"])
-        } else if (profile.type == "server") {
-            facets.push(["server_side:optional", "server_side:required"])
-            facets.push(["client_side:optional", "client_side:unsupported"])
-        } else if (profile.type == "both") {
-            facets.push(["client_side:optional", "client_side:required"])
-            facets.push(["server_side:optional", "server_side:required"])
-        }
-
-        if (!fs.existsSync("./cache.json")) {
-            fs.writeFileSync("./cache.json", "{\"search\":[]}")
-        }
-
-        var cache = JSON.parse(fs.readFileSync("./cache.json"))
-
-        function get(page) {
-            reliableFetch("https://api.modrinth.com/v2/search?index=updated&limit=100&offset=" + (page * 100) + "&facets=" + JSON.stringify(facets), { dataType: "json" }).then(mods => {
-                if (mods.hits.length > 0) {
-                    mods.hits.forEach(mod => {
-                        var found = false
-
-                        cache.search.forEach(cached => {
-                            if (mod.project_id == cached.id) {
-                                found = true
-
-                                if (new Date(mod.date_modified).getTime() > cached.lastChange) {
-                                    cache.search[cache.search.indexOf(cached)].lastChange = new Date(mod.date_modified).getTime()
-                                }
-                            }
-                        })
-
-                        if (!found) {
-                            cache.search.push({ id: mod.project_id, lastChange: new Date(mod.date_modified).getTime() })
-                        }
-                    })
-
-                    fs.writeFileSync("./cache.json", JSON.stringify(cache))
-
-                    get(page + 1)
-                }
-            })
-        }
-        get(0)
     } else {
-        return console.error("Unknown option \"" + mode + "\"\nTry one of \"check\", \"update\", \"add\", \"remove\", \"list\", \"cacheAll\"")
+        return console.error("Unknown option \"" + mode + "\"")
     }
 } else {
-    return console.error("Must pass an option\nTry one of \"check\", \"update\", \"add\", \"remove\", \"list\", \"cacheAll\"")
+    return console.error("Must pass an option")
 }
